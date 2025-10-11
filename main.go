@@ -8,5 +8,7 @@ func main() {
 		Handler: serveMux,
 		Addr:    ":8080",
 	}
+	serveMux.Handle("/", http.FileServer(http.Dir(".")))
+	serveMux.Handle("/assets/logo.png", http.FileServer(http.Dir(".")))
 	server.ListenAndServe()
 }
