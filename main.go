@@ -25,10 +25,9 @@ func main() {
 	}
 	config := apiConfig{fileServerHits: atomic.Int32{}}
 	serveMux.Handle("/app/", config.metricsMiddleware(handleFileserver()))
-	serveMux.HandleFunc("/reset", config.handleReset)
-	serveMux.HandleFunc("/healthz", handleHealthz)
-	serveMux.HandleFunc("/metrics", config.handleMetrics)
-	serveMux.Handle("/", http.FileServer(http.Dir(".")))
+	serveMux.HandleFunc("POST /reset", config.handleReset)
+	serveMux.HandleFunc("GET /healthz", handleHealthz)
+	serveMux.HandleFunc("GET /metrics", config.handleMetrics)
 	server.ListenAndServe()
 }
 
