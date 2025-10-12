@@ -1,9 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
-	"os"
+	"sync/atomic"
 )
+
+type apiConfig struct {
+	fileServerHits atomic.Int32
+}
+
+func (cfg *apiConfig) metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg.fileServerHits.Add(1)
+		next.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	serveMux := http.NewServeMux()
@@ -11,21 +23,28 @@ func main() {
 		Handler: serveMux,
 		Addr:    ":8080",
 	}
-	serveMux.HandleFunc("/app", handleApp)
-	serveMux.Handle("/app/", http.StripPrefix("/app", http.FileServer(http.Dir("."))))
+	config := apiConfig{fileServerHits: atomic.Int32{}}
+	serveMux.Handle("/app/", config.metricsMiddleware(handleFileserver()))
+	serveMux.HandleFunc("/reset", config.handleReset)
 	serveMux.HandleFunc("/healthz", handleHealthz)
+	serveMux.HandleFunc("/metrics", config.handleMetrics)
 	serveMux.Handle("/", http.FileServer(http.Dir(".")))
 	server.ListenAndServe()
 }
 
-func handleApp(responseWriter http.ResponseWriter, req *http.Request) {
+func handleFileserver() http.Handler {
+	return http.StripPrefix("/app", http.FileServer(http.Dir(".")))
+}
+func (cfg *apiConfig) handleMetrics(w http.ResponseWriter, req *http.Request) {
+	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(fmt.Sprintf("Hits: %d", cfg.fileServerHits.Load())))
+}
+func (cfg *apiConfig) handleReset(responseWriter http.ResponseWriter, req *http.Request) {
+	cfg.fileServerHits.Store(0)
 	responseWriter.WriteHeader(200)
-	responseWriter.Header().Add("Content-Type", "application/html")
-	res, err := os.ReadFile("index.html")
-	if err != nil {
-		return
-	}
-	responseWriter.Write(res)
+	responseWriter.Header().Add("Content-Type", "text/plain")
+	responseWriter.Write([]byte("OK"))
 }
 
 func handleHealthz(responseWriter http.ResponseWriter, req *http.Request) {
