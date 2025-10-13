@@ -25,9 +25,9 @@ func main() {
 	}
 	config := apiConfig{fileServerHits: atomic.Int32{}}
 	serveMux.Handle("/app/", config.metricsMiddleware(handleFileserver()))
-	serveMux.HandleFunc("POST /reset", config.handleReset)
-	serveMux.HandleFunc("GET /healthz", handleHealthz)
-	serveMux.HandleFunc("GET /metrics", config.handleMetrics)
+	serveMux.HandleFunc("POST /admin/reset", config.handleReset)
+	serveMux.HandleFunc("GET /api/healthz", handleHealthz)
+	serveMux.HandleFunc("GET /admin/metrics", config.handleMetrics)
 	server.ListenAndServe()
 }
 
@@ -35,9 +35,18 @@ func handleFileserver() http.Handler {
 	return http.StripPrefix("/app", http.FileServer(http.Dir(".")))
 }
 func (cfg *apiConfig) handleMetrics(w http.ResponseWriter, req *http.Request) {
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	metricsTemplate := ` 
+	<html>
+		<body>
+			<h1>Welcome, Chirpy Admin</h1>
+			<p>Chirpy has been visited %d times!</p>
+		</body>
+	</html>
+	`
+	w.Header().Add("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("Hits: %d", cfg.fileServerHits.Load())))
+
+	w.Write([]byte(fmt.Sprintf(metricsTemplate, cfg.fileServerHits.Load())))
 }
 func (cfg *apiConfig) handleReset(responseWriter http.ResponseWriter, req *http.Request) {
 	cfg.fileServerHits.Store(0)
