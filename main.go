@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync/atomic"
@@ -8,6 +9,10 @@ import (
 
 type apiConfig struct {
 	fileServerHits atomic.Int32
+}
+
+type apiError struct {
+	Error string `json:"error"`
 }
 
 func (cfg *apiConfig) metricsMiddleware(next http.Handler) http.Handler {
@@ -28,6 +33,7 @@ func main() {
 	serveMux.HandleFunc("POST /admin/reset", config.handleReset)
 	serveMux.HandleFunc("GET /api/healthz", handleHealthz)
 	serveMux.HandleFunc("GET /admin/metrics", config.handleMetrics)
+	serveMux.HandleFunc("POST /api/validate_chirp", validateChirp)
 	server.ListenAndServe()
 }
 
@@ -53,6 +59,18 @@ func (cfg *apiConfig) handleReset(responseWriter http.ResponseWriter, req *http.
 	responseWriter.WriteHeader(200)
 	responseWriter.Header().Add("Content-Type", "text/plain")
 	responseWriter.Write([]byte("OK"))
+}
+
+func validateChirp(res http.ResponseWriter, req *http.Request) {
+	type parameters struct {
+		Body string `json:"body"`
+	}
+	decoder := json.NewDecoder(req.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		res.WriteHeader(400)
+	}
 }
 
 func handleHealthz(responseWriter http.ResponseWriter, req *http.Request) {
