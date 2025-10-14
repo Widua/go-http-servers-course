@@ -65,12 +65,33 @@ func validateChirp(res http.ResponseWriter, req *http.Request) {
 	type parameters struct {
 		Body string `json:"body"`
 	}
+	type validConfirmation struct {
+		Valid bool `json:"valid"`
+	}
 	decoder := json.NewDecoder(req.Body)
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
 		res.WriteHeader(400)
+		errorMess := apiError{Error: err.Error()}
+		body, _ := json.Marshal(errorMess)
+		res.Write(body)
+		return
 	}
+	body := params.Body
+
+	if len(body) > 140 {
+		res.WriteHeader(400)
+		errorMess := apiError{Error: "Chirp is too long"}
+		body, _ := json.Marshal(errorMess)
+		res.Write(body)
+		return
+	}
+
+	resp := validConfirmation{Valid: true}
+	res.WriteHeader(200)
+	respBody, _ := json.Marshal(resp)
+	res.Write(respBody)
 }
 
 func handleHealthz(responseWriter http.ResponseWriter, req *http.Request) {
