@@ -1,18 +1,28 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"slices"
 	"strings"
 	"sync/atomic"
 
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"github.com/widua/go-http-server/api"
+	"github.com/widua/go-http-server/internal/database"
 )
 
 type apiConfig struct {
 	fileServerHits atomic.Int32
+}
+
+type databaseConfig struct {
+	db_connection *sql.DB
+	queries       *database.Queries
 }
 
 var profaneWords []string = []string{"kerfuffle", "sharbert", "fornax"}
@@ -25,6 +35,14 @@ func (cfg *apiConfig) metricsMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
+	godotenv.Load(".env")
+	dbUrl := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbUrl)
+	db_config := databaseConfig{db_connection: db, queries: database.New(db)}
+	fmt.Printf("Succesfully connected to database: %v", db_config.queries)
+	if err != nil {
+		panic("Error while connecting to database")
+	}
 	serveMux := http.NewServeMux()
 	server := http.Server{
 		Handler: serveMux,
