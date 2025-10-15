@@ -4,16 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"sync/atomic"
+
+	"github.com/widua/go-http-server/api"
 )
 
 type apiConfig struct {
 	fileServerHits atomic.Int32
 }
 
-type apiError struct {
-	Error string `json:"error"`
-}
+var profaneWords []string = []string{"kerfuffle", "sharbert", "fornax"}
 
 func (cfg *apiConfig) metricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,9 +58,7 @@ func (cfg *apiConfig) handleMetrics(w http.ResponseWriter, req *http.Request) {
 }
 func (cfg *apiConfig) handleReset(responseWriter http.ResponseWriter, req *http.Request) {
 	cfg.fileServerHits.Store(0)
-	responseWriter.WriteHeader(200)
-	responseWriter.Header().Add("Content-Type", "text/plain")
-	responseWriter.Write([]byte("OK"))
+	api.RespondOk(responseWriter)
 }
 
 func validateChirp(res http.ResponseWriter, req *http.Request) {
@@ -72,30 +72,41 @@ func validateChirp(res http.ResponseWriter, req *http.Request) {
 	params := parameters{}
 	err := decoder.Decode(&params)
 	if err != nil {
-		res.WriteHeader(400)
-		errorMess := apiError{Error: err.Error()}
-		body, _ := json.Marshal(errorMess)
-		res.Write(body)
+		api.RespondWithError(res, 400, err.Error())
 		return
 	}
 	body := params.Body
 
 	if len(body) > 140 {
-		res.WriteHeader(400)
-		errorMess := apiError{Error: "Chirp is too long"}
-		body, _ := json.Marshal(errorMess)
-		res.Write(body)
+		api.RespondWithError(res, 400, "Chirp is too long")
+		return
+	}
+	chirpClearer(res, body)
+}
+
+func chirpClearer(out http.ResponseWriter, body string) {
+	type cleanedBody struct {
+		CleanedBody string `json:"cleaned_body"`
+	}
+	splittedBody := strings.Split(body, " ")
+
+	for ix, word := range splittedBody {
+		if slices.Contains(profaneWords, strings.ToLower(word)) {
+			splittedBody[ix] = "****"
+		}
+	}
+	censoredBody := cleanedBody{CleanedBody: strings.Join(splittedBody, " ")}
+
+	byteBody, err := json.Marshal(censoredBody)
+
+	if err != nil {
+		api.RespondWithError(out, 400, err.Error())
 		return
 	}
 
-	resp := validConfirmation{Valid: true}
-	res.WriteHeader(200)
-	respBody, _ := json.Marshal(resp)
-	res.Write(respBody)
+	api.RespondWithJSON(out, 200, byteBody)
 }
 
 func handleHealthz(responseWriter http.ResponseWriter, req *http.Request) {
-	responseWriter.WriteHeader(200)
-	responseWriter.Header().Add("Content-Type", "text/plain")
-	responseWriter.Write([]byte("OK"))
+	api.RespondOk(responseWriter)
 }
