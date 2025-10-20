@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -26,6 +27,7 @@ type databaseConfig struct {
 }
 
 var profaneWords []string = []string{"kerfuffle", "sharbert", "fornax"}
+var db_config databaseConfig
 
 func (cfg *apiConfig) metricsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +40,7 @@ func main() {
 	godotenv.Load(".env")
 	dbUrl := os.Getenv("DB_URL")
 	db, err := sql.Open("postgres", dbUrl)
-	db_config := databaseConfig{db_connection: db, queries: database.New(db)}
+	db_config = databaseConfig{db_connection: db, queries: database.New(db)}
 	fmt.Printf("Succesfully connected to database: %v", db_config.queries)
 	if err != nil {
 		panic("Error while connecting to database")
@@ -54,6 +56,7 @@ func main() {
 	serveMux.HandleFunc("GET /api/healthz", handleHealthz)
 	serveMux.HandleFunc("GET /admin/metrics", config.handleMetrics)
 	serveMux.HandleFunc("POST /api/validate_chirp", validateChirp)
+	serveMux.HandleFunc("POST /api/users", handleCreateUser)
 	server.ListenAndServe()
 }
 
@@ -127,4 +130,32 @@ func chirpClearer(out http.ResponseWriter, body string) {
 
 func handleHealthz(responseWriter http.ResponseWriter, req *http.Request) {
 	api.RespondOk(responseWriter)
+}
+func handleCreateUser(out http.ResponseWriter, req *http.Request) {
+	type createUserBody struct {
+		Email string `json:"email"`
+	}
+	parsedBody := createUserBody{}
+	decoder := json.NewDecoder(req.Body)
+
+	err := decoder.Decode(&parsedBody)
+	if err != nil {
+		api.RespondWithError(out, 400, err.Error())
+		return
+	}
+	if parsedBody == (createUserBody{}) {
+		api.RespondWithError(out, 400, fmt.Sprintf("Invalid body"))
+		return
+	}
+	usr, err := db_config.queries.CreateUser(context.Background(), parsedBody.Email)
+
+	user := api.User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email}
+	byteBody, err := json.Marshal(user)
+	if err != nil {
+		api.RespondWithError(out, 400, err.Error())
+		return
+	}
+
+	api.RespondWithJSON(out, 201, byteBody)
+
 }
