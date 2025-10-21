@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"slices"
 	"strings"
 	"sync/atomic"
 
+	"github.com/google/uuid"
 	"github.com/widua/go-http-server/internal/database"
 )
 
@@ -38,34 +40,18 @@ func (cfg *ApiConfig) HandleReset(out http.ResponseWriter, req *http.Request) {
 	RespondOk(out)
 }
 
-func ValidateChirp(out http.ResponseWriter, req *http.Request) {
-	type parameters struct {
-		Body string `json:"body"`
-	}
-	type validConfirmation struct {
-		Valid bool `json:"valid"`
-	}
-	decoder := json.NewDecoder(req.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		RespondWithError(out, 400, err.Error())
-		return
-	}
-	body := params.Body
+func ValidateChirp(body string) (string, error) {
 
 	if len(body) > 140 {
-		RespondWithError(out, 400, "Chirp is too long")
-		return
+		return "", errors.New("Chirp is too long")
 	}
-	ChirpClearer(out, body)
+	censoredChirp := ChirpClearer(body)
+	return censoredChirp, nil
 }
 
-func ChirpClearer(out http.ResponseWriter, body string) {
+func ChirpClearer(body string) string {
 	var profaneWords []string = []string{"kerfuffle", "sharbert", "fornax"}
-	type cleanedBody struct {
-		CleanedBody string `json:"cleaned_body"`
-	}
+
 	splittedBody := strings.Split(body, " ")
 
 	for ix, word := range splittedBody {
@@ -73,16 +59,9 @@ func ChirpClearer(out http.ResponseWriter, body string) {
 			splittedBody[ix] = "****"
 		}
 	}
-	censoredBody := cleanedBody{CleanedBody: strings.Join(splittedBody, " ")}
+	censoredBody := strings.Join(splittedBody, " ")
 
-	byteBody, err := json.Marshal(censoredBody)
-
-	if err != nil {
-		RespondWithError(out, 400, err.Error())
-		return
-	}
-
-	RespondWithJSON(out, 200, byteBody)
+	return censoredBody
 }
 
 func HandleHealthz(out http.ResponseWriter, req *http.Request) {
@@ -113,6 +92,34 @@ func HandleCreateUser(out http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	RespondWithJSON(out, 201, byteBody)
+
+}
+func HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
+	type createChirpBody struct {
+		Body   string    `json:"body"`
+		UserID uuid.UUID `json:"user_id"`
+	}
+	parsedReqBody := createChirpBody{}
+	decoder := json.NewDecoder(req.Body)
+
+	err := decoder.Decode(&parsedReqBody)
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+	if parsedReqBody == (createChirpBody{}) {
+		RespondWithError(out, 400, "Invalid body")
+		return
+	}
+
+	chirp, err := database.DB_Config.Queries.CreateChirp(context.Background(), database.CreateChirpParams{Body: parsedReqBody.Body, UserID: parsedReqBody.UserID})
+	mappedChirp := Chirp{ID: chirp.ID, CreatedAt: chirp.CreatedAt, UpdatedAt: chirp.UpdatedAt, Body: chirp.Body, UserID: chirp.UserID}
+	byteBody, err := json.Marshal(mappedChirp)
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
 	RespondWithJSON(out, 201, byteBody)
 
 }
