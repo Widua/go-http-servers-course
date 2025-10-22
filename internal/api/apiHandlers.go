@@ -37,6 +37,8 @@ func (cfg *ApiConfig) HandleMetrics(out http.ResponseWriter, req *http.Request) 
 
 func (cfg *ApiConfig) HandleReset(out http.ResponseWriter, req *http.Request) {
 	cfg.FileServerHits.Store(0)
+	database.DB_Config.Queries.ResetUsers(context.Background())
+	database.DB_Config.Queries.ResetChirps(context.Background())
 	RespondOk(out)
 }
 
@@ -122,4 +124,51 @@ func HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
 	}
 	RespondWithJSON(out, 201, byteBody)
 
+}
+func HandleGetChirps(out http.ResponseWriter, req *http.Request) {
+	chirps, err := database.DB_Config.Queries.GetAllChirps(context.Background())
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+	mappedChirps := make([]Chirp, len(chirps))
+
+	for ix, chirp := range chirps {
+		mappedChirps[ix] = Chirp{ID: chirp.ID, CreatedAt: chirp.CreatedAt, UpdatedAt: chirp.UpdatedAt, Body: chirp.Body, UserID: chirp.UserID}
+	}
+	mappedChirpsBytes, _ := json.Marshal(mappedChirps)
+
+	RespondWithJSON(out, 200, mappedChirpsBytes)
+
+}
+
+func HandleGetChirp(out http.ResponseWriter, req *http.Request) {
+	chirpID := req.PathValue("chirpID")
+	err := uuid.Validate(chirpID)
+
+	if err != nil {
+		RespondWithError(out, 400, "It's not valid chirp ID")
+		return
+	}
+
+	chirp, err := database.DB_Config.Queries.GetChirpByID(context.Background(), uuid.MustParse(chirpID))
+
+	if err != nil {
+		RespondWithError(out, 404, err.Error())
+		return
+	}
+
+	if chirp == (database.Chirp{}) {
+		RespondWithError(out, 404, "Chirp does not exist")
+		return
+	}
+
+	mappedChirp := Chirp{ID: chirp.ID, CreatedAt: chirp.CreatedAt, UpdatedAt: chirp.UpdatedAt, UserID: chirp.ID, Body: chirp.Body}
+	jsonChirp, err := json.Marshal(mappedChirp)
+
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+	RespondWithJSON(out, 200, jsonChirp)
 }
