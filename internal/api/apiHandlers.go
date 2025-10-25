@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/widua/go-http-server/internal/auth"
 	"github.com/widua/go-http-server/internal/database"
 )
 
@@ -71,7 +72,8 @@ func HandleHealthz(out http.ResponseWriter, req *http.Request) {
 }
 func HandleCreateUser(out http.ResponseWriter, req *http.Request) {
 	type createUserBody struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	parsedBody := createUserBody{}
 	decoder := json.NewDecoder(req.Body)
@@ -85,7 +87,8 @@ func HandleCreateUser(out http.ResponseWriter, req *http.Request) {
 		RespondWithError(out, 400, "Invalid body")
 		return
 	}
-	usr, err := database.DB_Config.Queries.CreateUser(context.Background(), parsedBody.Email)
+	passwdHash, _ := auth.HashPassword(parsedBody.Password)
+	usr, err := database.DB_Config.Queries.CreateUser(context.Background(), database.CreateUserParams{Email: parsedBody.Email, HashedPassword: passwdHash})
 
 	user := User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email}
 	byteBody, err := json.Marshal(user)
@@ -125,6 +128,7 @@ func HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
 	RespondWithJSON(out, 201, byteBody)
 
 }
+<<<<<<< HEAD
 func HandleGetChirps(out http.ResponseWriter, req *http.Request) {
 	chirps, err := database.DB_Config.Queries.GetAllChirps(context.Background())
 	if err != nil {
@@ -172,3 +176,19 @@ func HandleGetChirp(out http.ResponseWriter, req *http.Request) {
 	}
 	RespondWithJSON(out, 200, jsonChirp)
 }
+=======
+
+func HandleLogin(out http.ResponseWriter, req *http.Request) {
+	type loginRequestBody struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	parsedReqBody := loginRequestBody{}
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&parsedReqBody)
+	if err != nil {
+		RespondWithError(out, 400, "Error handling login data")
+	}
+
+}
+>>>>>>> 4d8728a (auth 1)

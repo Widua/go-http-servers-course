@@ -28,7 +28,11 @@ func main() {
 	serveMux.HandleFunc("GET /admin/metrics", config.HandleMetrics)
 	serveMux.HandleFunc("POST /api/users", api.HandleCreateUser)
 	serveMux.HandleFunc("POST /api/chirps", api.HandleCreateChirp)
+<<<<<<< HEAD
 	serveMux.HandleFunc("GET /api/chirps", api.HandleGetChirps)
 	serveMux.HandleFunc("GET /api/chirps/{chirpID}", api.HandleGetChirp)
+=======
+	serveMux.HandleFunc("POST /api/login", api.HandleLogin)
+>>>>>>> 4d8728a (auth 1)
 	server.ListenAndServe()
 }
