@@ -128,7 +128,6 @@ func HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
 	RespondWithJSON(out, 201, byteBody)
 
 }
-<<<<<<< HEAD
 func HandleGetChirps(out http.ResponseWriter, req *http.Request) {
 	chirps, err := database.DB_Config.Queries.GetAllChirps(context.Background())
 	if err != nil {
@@ -176,7 +175,6 @@ func HandleGetChirp(out http.ResponseWriter, req *http.Request) {
 	}
 	RespondWithJSON(out, 200, jsonChirp)
 }
-=======
 
 func HandleLogin(out http.ResponseWriter, req *http.Request) {
 	type loginRequestBody struct {
@@ -191,4 +189,3 @@ func HandleLogin(out http.ResponseWriter, req *http.Request) {
 	}
 
 }
->>>>>>> 4d8728a (auth 1)

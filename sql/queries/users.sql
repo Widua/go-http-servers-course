@@ -10,4 +10,3 @@ DELETE FROM users;
 
 -- name: GetUserByEmail :one
 SELECT * FROM users where id = $1;
->>>>>>> 4d8728a (auth 1)
