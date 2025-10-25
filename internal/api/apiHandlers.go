@@ -186,6 +186,24 @@ func HandleLogin(out http.ResponseWriter, req *http.Request) {
 	err := decoder.Decode(&parsedReqBody)
 	if err != nil {
 		RespondWithError(out, 400, "Error handling login data")
+		return
 	}
 
+	usr, err := database.DB_Config.Queries.GetUserByEmail(context.Background(), parsedReqBody.Email)
+	if err != nil {
+		RespondWithError(out, 400, "User does not exist")
+		return
+	}
+	valid, _ := auth.CheckPasswordHash(parsedReqBody.Password, usr.HashedPassword)
+	if !valid {
+		RespondWithError(out, 401, "Wrong password")
+		return
+	}
+	user := FromDatabaseUser(usr)
+	jsonUser, err := json.Marshal(user)
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+	RespondWithJSON(out, 200, jsonUser)
 }
