@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/widua/go-http-server/internal/auth"
@@ -18,7 +19,7 @@ import (
 type ApiConfig struct {
 	FileServerHits atomic.Int32
 	JWT_Secret     string
-	DB_Config      database.DatabaseConfig
+	DB_Config      *database.DatabaseConfig
 }
 
 func HandleFileserver() http.Handler {
@@ -92,7 +93,7 @@ func (cfg *ApiConfig) HandleCreateUser(out http.ResponseWriter, req *http.Reques
 	passwdHash, _ := auth.HashPassword(parsedBody.Password)
 	usr, err := cfg.DB_Config.Queries.CreateUser(context.Background(), database.CreateUserParams{Email: parsedBody.Email, HashedPassword: passwdHash})
 
-	user := User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email}
+	user := RegisterFromDatabaseUser(usr)
 	byteBody, err := json.Marshal(user)
 	if err != nil {
 		RespondWithError(out, 400, err.Error())
@@ -104,8 +105,7 @@ func (cfg *ApiConfig) HandleCreateUser(out http.ResponseWriter, req *http.Reques
 }
 func (cfg *ApiConfig) HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
 	type createChirpBody struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 	parsedReqBody := createChirpBody{}
 	decoder := json.NewDecoder(req.Body)
@@ -119,8 +119,19 @@ func (cfg *ApiConfig) HandleCreateChirp(out http.ResponseWriter, req *http.Reque
 		RespondWithError(out, 400, "Invalid body")
 		return
 	}
+	token, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		RespondWithError(out, 401, err.Error())
+		return
+	}
+	tokenuuid, err := auth.ValidateJWT(token, cfg.JWT_Secret)
+	if err != nil {
+		fmt.Printf("%v", err)
+		RespondWithError(out, 401, err.Error())
+		return
+	}
 
-	chirp, err := cfg.DB_Config.Queries.CreateChirp(context.Background(), database.CreateChirpParams{Body: parsedReqBody.Body, UserID: parsedReqBody.UserID})
+	chirp, err := cfg.DB_Config.Queries.CreateChirp(context.Background(), database.CreateChirpParams{Body: parsedReqBody.Body, UserID: tokenuuid})
 	mappedChirp := Chirp{ID: chirp.ID, CreatedAt: chirp.CreatedAt, UpdatedAt: chirp.UpdatedAt, Body: chirp.Body, UserID: chirp.UserID}
 	byteBody, err := json.Marshal(mappedChirp)
 	if err != nil {
@@ -180,8 +191,9 @@ func (cfg *ApiConfig) HandleGetChirp(out http.ResponseWriter, req *http.Request)
 
 func (cfg *ApiConfig) HandleLogin(out http.ResponseWriter, req *http.Request) {
 	type loginRequestBody struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
 	}
 	parsedReqBody := loginRequestBody{}
 	decoder := json.NewDecoder(req.Body)
@@ -190,7 +202,9 @@ func (cfg *ApiConfig) HandleLogin(out http.ResponseWriter, req *http.Request) {
 		RespondWithError(out, 400, "Error handling login data")
 		return
 	}
-
+	if parsedReqBody.ExpiresInSeconds == 0 {
+		parsedReqBody.ExpiresInSeconds = 3600
+	}
 	usr, err := cfg.DB_Config.Queries.GetUserByEmail(context.Background(), parsedReqBody.Email)
 	if err != nil {
 		RespondWithError(out, 400, "User does not exist")
@@ -201,7 +215,13 @@ func (cfg *ApiConfig) HandleLogin(out http.ResponseWriter, req *http.Request) {
 		RespondWithError(out, 401, "Wrong password")
 		return
 	}
-	user := FromDatabaseUser(usr)
+	token, err := auth.CreateJWTToken(usr.ID, cfg.JWT_Secret, time.Duration(parsedReqBody.ExpiresInSeconds)*time.Second)
+	if err != nil {
+		RespondWithError(out, 401, err.Error())
+		return
+	}
+
+	user := FromDatabaseUser(usr, token)
 	jsonUser, err := json.Marshal(user)
 	if err != nil {
 		RespondWithError(out, 400, err.Error())

@@ -12,17 +12,33 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
-func FromDatabaseUser(dbUser database.User) User {
+type RegisterResponse struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
 
-	return User{
+func RegisterFromDatabaseUser(dbUser database.User) RegisterResponse {
+	return RegisterResponse{
 		ID:        dbUser.ID,
 		CreatedAt: dbUser.CreatedAt,
 		UpdatedAt: dbUser.UpdatedAt,
 		Email:     dbUser.Email,
 	}
+}
 
+func FromDatabaseUser(dbUser database.User, token string) User {
+	return User{
+		ID:        dbUser.ID,
+		CreatedAt: dbUser.CreatedAt,
+		UpdatedAt: dbUser.UpdatedAt,
+		Email:     dbUser.Email,
+		Token:     token,
+	}
 }
 
 type Chirp struct {

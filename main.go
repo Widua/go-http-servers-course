@@ -22,7 +22,7 @@ func main() {
 		Handler: serveMux,
 		Addr:    ":8080",
 	}
-	config := api.ApiConfig{FileServerHits: atomic.Int32{}, JWT_Secret: tokenSecret, DB_Config: dbconfig}
+	config := api.ApiConfig{FileServerHits: atomic.Int32{}, JWT_Secret: tokenSecret, DB_Config: &dbconfig}
 	serveMux.Handle("/app/", config.MetricsMiddleware(api.HandleFileserver()))
 	serveMux.HandleFunc("POST /admin/reset", config.HandleReset)
 	serveMux.HandleFunc("GET /api/healthz", config.HandleHealthz)

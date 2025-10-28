@@ -22,19 +22,19 @@ func CheckPasswordHash(password string, hash string) (bool, error) {
 }
 
 func CreateJWTToken(userID uuid.UUID, tokenSecret string, expires time.Duration) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{Issuer: "chirpy", IssuedAt: jwt.NewNumericDate(time.Now()), ExpiresAt: jwt.NewNumericDate(time.Now().Add(expires)), Subject: userID.String()})
-	return token.SignedString(tokenSecret)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{Issuer: "chirpy", IssuedAt: jwt.NewNumericDate(time.Now().UTC()), ExpiresAt: jwt.NewNumericDate(time.Now().Add(expires).UTC()), Subject: userID.String()})
+	return token.SignedString([]byte(tokenSecret))
 }
 
 func ValidateJWT(tokenString string, tokenSecret string) (uuid.UUID, error) {
-	token, err := jwt.ParseWithClaims(tokenSecret, jwt.RegisteredClaims{}, func(t *jwt.Token) (any, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("Unexpected signing method: %v", t.Header["alg"])
 		}
-		return tokenSecret, nil
+		return []byte(tokenSecret), nil
 	})
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.UUID{}, fmt.Errorf("Error while parsing claims: %v", err)
 	}
 	if issuer, err := token.Claims.GetIssuer(); issuer != "chirpy" {
 		if err != nil {
@@ -44,14 +44,13 @@ func ValidateJWT(tokenString string, tokenSecret string) (uuid.UUID, error) {
 	}
 	subject, err := token.Claims.GetSubject()
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.UUID{}, fmt.Errorf("Error while getting claims: %v", err)
 	}
 	userId, err := uuid.Parse(subject)
 	if err != nil {
-		return uuid.UUID{}, err
+		return uuid.UUID{}, fmt.Errorf("Error while parsing UUID: %v", err)
 	}
 	return userId, nil
-
 }
 
 func GetBearerToken(headers http.Header) (string, error) {
