@@ -17,6 +17,8 @@ import (
 
 type ApiConfig struct {
 	FileServerHits atomic.Int32
+	JWT_Secret     string
+	DB_Config      database.DatabaseConfig
 }
 
 func HandleFileserver() http.Handler {
@@ -38,12 +40,12 @@ func (cfg *ApiConfig) HandleMetrics(out http.ResponseWriter, req *http.Request) 
 
 func (cfg *ApiConfig) HandleReset(out http.ResponseWriter, req *http.Request) {
 	cfg.FileServerHits.Store(0)
-	database.DB_Config.Queries.ResetUsers(context.Background())
-	database.DB_Config.Queries.ResetChirps(context.Background())
+	cfg.DB_Config.Queries.ResetUsers(context.Background())
+	cfg.DB_Config.Queries.ResetChirps(context.Background())
 	RespondOk(out)
 }
 
-func ValidateChirp(body string) (string, error) {
+func (cfg *ApiConfig) ValidateChirp(body string) (string, error) {
 
 	if len(body) > 140 {
 		return "", errors.New("Chirp is too long")
@@ -67,10 +69,10 @@ func ChirpClearer(body string) string {
 	return censoredBody
 }
 
-func HandleHealthz(out http.ResponseWriter, req *http.Request) {
+func (cfg *ApiConfig) HandleHealthz(out http.ResponseWriter, req *http.Request) {
 	RespondOk(out)
 }
-func HandleCreateUser(out http.ResponseWriter, req *http.Request) {
+func (cfg *ApiConfig) HandleCreateUser(out http.ResponseWriter, req *http.Request) {
 	type createUserBody struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -88,7 +90,7 @@ func HandleCreateUser(out http.ResponseWriter, req *http.Request) {
 		return
 	}
 	passwdHash, _ := auth.HashPassword(parsedBody.Password)
-	usr, err := database.DB_Config.Queries.CreateUser(context.Background(), database.CreateUserParams{Email: parsedBody.Email, HashedPassword: passwdHash})
+	usr, err := cfg.DB_Config.Queries.CreateUser(context.Background(), database.CreateUserParams{Email: parsedBody.Email, HashedPassword: passwdHash})
 
 	user := User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email}
 	byteBody, err := json.Marshal(user)
@@ -100,7 +102,7 @@ func HandleCreateUser(out http.ResponseWriter, req *http.Request) {
 	RespondWithJSON(out, 201, byteBody)
 
 }
-func HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
+func (cfg *ApiConfig) HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
 	type createChirpBody struct {
 		Body   string    `json:"body"`
 		UserID uuid.UUID `json:"user_id"`
@@ -118,7 +120,7 @@ func HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	chirp, err := database.DB_Config.Queries.CreateChirp(context.Background(), database.CreateChirpParams{Body: parsedReqBody.Body, UserID: parsedReqBody.UserID})
+	chirp, err := cfg.DB_Config.Queries.CreateChirp(context.Background(), database.CreateChirpParams{Body: parsedReqBody.Body, UserID: parsedReqBody.UserID})
 	mappedChirp := Chirp{ID: chirp.ID, CreatedAt: chirp.CreatedAt, UpdatedAt: chirp.UpdatedAt, Body: chirp.Body, UserID: chirp.UserID}
 	byteBody, err := json.Marshal(mappedChirp)
 	if err != nil {
@@ -128,8 +130,8 @@ func HandleCreateChirp(out http.ResponseWriter, req *http.Request) {
 	RespondWithJSON(out, 201, byteBody)
 
 }
-func HandleGetChirps(out http.ResponseWriter, req *http.Request) {
-	chirps, err := database.DB_Config.Queries.GetAllChirps(context.Background())
+func (cfg *ApiConfig) HandleGetChirps(out http.ResponseWriter, req *http.Request) {
+	chirps, err := cfg.DB_Config.Queries.GetAllChirps(context.Background())
 	if err != nil {
 		RespondWithError(out, 400, err.Error())
 		return
@@ -145,7 +147,7 @@ func HandleGetChirps(out http.ResponseWriter, req *http.Request) {
 
 }
 
-func HandleGetChirp(out http.ResponseWriter, req *http.Request) {
+func (cfg *ApiConfig) HandleGetChirp(out http.ResponseWriter, req *http.Request) {
 	chirpID := req.PathValue("chirpID")
 	err := uuid.Validate(chirpID)
 
@@ -154,7 +156,7 @@ func HandleGetChirp(out http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	chirp, err := database.DB_Config.Queries.GetChirpByID(context.Background(), uuid.MustParse(chirpID))
+	chirp, err := cfg.DB_Config.Queries.GetChirpByID(context.Background(), uuid.MustParse(chirpID))
 
 	if err != nil {
 		RespondWithError(out, 404, err.Error())
@@ -176,7 +178,7 @@ func HandleGetChirp(out http.ResponseWriter, req *http.Request) {
 	RespondWithJSON(out, 200, jsonChirp)
 }
 
-func HandleLogin(out http.ResponseWriter, req *http.Request) {
+func (cfg *ApiConfig) HandleLogin(out http.ResponseWriter, req *http.Request) {
 	type loginRequestBody struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -189,7 +191,7 @@ func HandleLogin(out http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	usr, err := database.DB_Config.Queries.GetUserByEmail(context.Background(), parsedReqBody.Email)
+	usr, err := cfg.DB_Config.Queries.GetUserByEmail(context.Background(), parsedReqBody.Email)
 	if err != nil {
 		RespondWithError(out, 400, "User does not exist")
 		return

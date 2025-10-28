@@ -1,11 +1,15 @@
 package auth
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/alexedwards/argon2id"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"time"
 )
 
 func HashPassword(password string) (string, error) {
@@ -48,4 +52,15 @@ func ValidateJWT(tokenString string, tokenSecret string) (uuid.UUID, error) {
 	}
 	return userId, nil
 
+}
+
+func GetBearerToken(headers http.Header) (string, error) {
+	authHeader := headers.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("No Authorization header")
+	}
+	if !strings.Contains(authHeader, "Bearer ") {
+		return "", errors.New("No Bearer token in Authorization header")
+	}
+	return strings.Split(authHeader, " ")[1], nil
 }
