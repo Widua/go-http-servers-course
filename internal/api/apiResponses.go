@@ -23,6 +23,10 @@ func RespondWithJSON(out http.ResponseWriter, statusCode int, responseBody []byt
 
 }
 
+func RespondNoContent(out http.ResponseWriter) {
+	out.WriteHeader(204)
+}
+
 func RespondOk(out http.ResponseWriter) {
 	out.WriteHeader(200)
 	out.Header().Add("Content-Type", "text/plain")

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -126,7 +127,6 @@ func (cfg *ApiConfig) HandleCreateChirp(out http.ResponseWriter, req *http.Reque
 	}
 	tokenuuid, err := auth.ValidateJWT(token, cfg.JWT_Secret)
 	if err != nil {
-		fmt.Printf("%v", err)
 		RespondWithError(out, 401, err.Error())
 		return
 	}
@@ -191,9 +191,8 @@ func (cfg *ApiConfig) HandleGetChirp(out http.ResponseWriter, req *http.Request)
 
 func (cfg *ApiConfig) HandleLogin(out http.ResponseWriter, req *http.Request) {
 	type loginRequestBody struct {
-		Email            string `json:"email"`
-		Password         string `json:"password"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 	parsedReqBody := loginRequestBody{}
 	decoder := json.NewDecoder(req.Body)
@@ -201,9 +200,6 @@ func (cfg *ApiConfig) HandleLogin(out http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		RespondWithError(out, 400, "Error handling login data")
 		return
-	}
-	if parsedReqBody.ExpiresInSeconds == 0 {
-		parsedReqBody.ExpiresInSeconds = 3600
 	}
 	usr, err := cfg.DB_Config.Queries.GetUserByEmail(context.Background(), parsedReqBody.Email)
 	if err != nil {
@@ -215,17 +211,77 @@ func (cfg *ApiConfig) HandleLogin(out http.ResponseWriter, req *http.Request) {
 		RespondWithError(out, 401, "Wrong password")
 		return
 	}
-	token, err := auth.CreateJWTToken(usr.ID, cfg.JWT_Secret, time.Duration(parsedReqBody.ExpiresInSeconds)*time.Second)
+	token, err := auth.CreateJWTToken(usr.ID, cfg.JWT_Secret, 3600*time.Second)
 	if err != nil {
 		RespondWithError(out, 401, err.Error())
 		return
 	}
 
-	user := FromDatabaseUser(usr, token)
+	refreshToken, _ := auth.MakeRefreshToken()
+	refreshTokenDB, err := cfg.DB_Config.Queries.CreateRefreshToken(context.Background(), database.CreateRefreshTokenParams{Token: refreshToken, UserID: usr.ID})
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+	fmt.Printf("REFRESHTOKEN: %v", refreshToken)
+
+	user := FromDatabaseUser(usr, token, refreshTokenDB.Token)
 	jsonUser, err := json.Marshal(user)
 	if err != nil {
 		RespondWithError(out, 400, err.Error())
 		return
 	}
+
 	RespondWithJSON(out, 200, jsonUser)
+}
+
+func (cfg *ApiConfig) HandleRefreshToken(out http.ResponseWriter, req *http.Request) {
+	type tokenResponse struct {
+		Token string `json:"token"`
+	}
+	token := tokenResponse{}
+
+	refreshToken, err := auth.GetBearerToken(req.Header)
+
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+
+	refreshTokenData, err := cfg.DB_Config.Queries.GetRefreshTokenByToken(context.Background(), refreshToken)
+
+	if err != nil {
+		RespondWithError(out, 401, err.Error())
+		return
+	}
+	if refreshTokenData.RevokedAt != (sql.NullTime{}) {
+		RespondWithError(out, 401, "That refresh token is revoked")
+		return
+	}
+
+	jwt, err := auth.CreateJWTToken(refreshTokenData.UserID, cfg.JWT_Secret, 3600*time.Second)
+	if err != nil {
+		RespondWithError(out, 401, err.Error())
+		return
+
+	}
+	token.Token = jwt
+
+	resByte, _ := json.Marshal(token)
+	RespondWithJSON(out, 200, resByte)
+}
+
+func (cfg *ApiConfig) HandleRevokeToken(out http.ResponseWriter, req *http.Request) {
+	refreshToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+	err = cfg.DB_Config.Queries.RevokeAccessToToken(context.Background(), refreshToken)
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+
+	RespondNoContent(out)
 }

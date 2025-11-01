@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func hashingTest(t *testing.T) {
+func TestHashing(t *testing.T) {
 	password := "testPasswd1"
 
 	hash, err := HashPassword(password)
@@ -24,18 +24,7 @@ func hashingTest(t *testing.T) {
 	}
 }
 
-func HashingCheckTest(t *testing.T) {
-	password := "testPasswd1"
-	hash, _ := HashPassword(password)
-	valid, _, _ := argon2id.CheckHash(password, hash)
-	validAuth, _ := CheckPasswordHash(password, hash)
-
-	if valid != validAuth {
-		t.Errorf("Output from argon2id.CheckHash, and from CheckPasswordHash should match")
-	}
-}
-
-func JWTTokenCycleTest(t *testing.T) {
+func TestJWTTokenCycle(t *testing.T) {
 	userId := uuid.New()
 	tokenSecret := "secret"
 	expires := time.Second * 5
@@ -54,7 +43,7 @@ func JWTTokenCycleTest(t *testing.T) {
 	}
 }
 
-func JWTTokenCycleExpiredTest(t *testing.T) {
+func TestJWTTokenCycleExpired(t *testing.T) {
 	userId := uuid.New()
 	tokenSecret := "secret"
 	expires := time.Millisecond
