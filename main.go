@@ -31,8 +31,10 @@ func main() {
 	serveMux.HandleFunc("POST /api/chirps", config.HandleCreateChirp)
 	serveMux.HandleFunc("GET /api/chirps", config.HandleGetChirps)
 	serveMux.HandleFunc("GET /api/chirps/{chirpID}", config.HandleGetChirp)
+	serveMux.HandleFunc("DELETE /api/chirps/{chirpID}", config.HandleDeleteChirp)
 	serveMux.HandleFunc("POST /api/login", config.HandleLogin)
 	serveMux.HandleFunc("POST /api/refresh", config.HandleRefreshToken)
 	serveMux.HandleFunc("POST /api/revoke", config.HandleRevokeToken)
+	serveMux.HandleFunc("PUT /api/users", config.HandleUpdateUser)
 	server.ListenAndServe()
 }

@@ -23,8 +23,8 @@ func RespondWithJSON(out http.ResponseWriter, statusCode int, responseBody []byt
 
 }
 
-func RespondNoContent(out http.ResponseWriter) {
-	out.WriteHeader(204)
+func RespondNoContent(out http.ResponseWriter, statusCode int) {
+	out.WriteHeader(statusCode)
 }
 
 func RespondOk(out http.ResponseWriter) {

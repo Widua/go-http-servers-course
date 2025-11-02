@@ -283,5 +283,82 @@ func (cfg *ApiConfig) HandleRevokeToken(out http.ResponseWriter, req *http.Reque
 		return
 	}
 
-	RespondNoContent(out)
+	RespondNoContent(out, 204)
+}
+
+func (cfg *ApiConfig) HandleUpdateUser(out http.ResponseWriter, req *http.Request) {
+	type updateData struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	reqUpdateData := updateData{}
+	apiToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		RespondWithError(out, 401, "Token missing")
+		return
+	}
+	decoder := json.NewDecoder(req.Body)
+	decoder.Decode(&reqUpdateData)
+
+	userId, err := auth.ValidateJWT(apiToken, cfg.JWT_Secret)
+	if err != nil {
+		RespondWithError(out, 401, "Invalid Token")
+		return
+	}
+
+	hashedPassword, _ := auth.HashPassword(reqUpdateData.Password)
+
+	err = cfg.DB_Config.Queries.UpdateUser(context.Background(), database.UpdateUserParams{Email: reqUpdateData.Email, HashedPassword: hashedPassword, ID: userId})
+	if err != nil {
+		RespondWithError(out, 401, "Problem while updating User")
+		fmt.Printf("%v", err)
+		return
+	}
+
+	updatedUser, _ := cfg.DB_Config.Queries.GetUserByID(context.Background(), userId)
+	mappedUpser := RegisterFromDatabaseUser(updatedUser)
+	parsedJsonUser, _ := json.Marshal(mappedUpser)
+
+	RespondWithJSON(out, 200, parsedJsonUser)
+}
+
+func (cfg *ApiConfig) HandleDeleteChirp(out http.ResponseWriter, req *http.Request) {
+	apiToken, err := auth.GetBearerToken(req.Header)
+	if err != nil {
+		RespondWithError(out, 401, "Token missing")
+		return
+	}
+	userId, err := auth.ValidateJWT(apiToken, cfg.JWT_Secret)
+	if err != nil {
+		RespondWithError(out, 401, "Invalid token")
+		return
+	}
+
+	chirpID := req.PathValue("chirpID")
+	parsedChirp, err := uuid.Parse(chirpID)
+	if err != nil {
+		RespondWithError(out, 404, "Invalid ChirpID")
+		return
+	}
+
+	chirp, err := cfg.DB_Config.Queries.GetChirpByID(context.Background(), parsedChirp)
+
+	if err != nil {
+		RespondWithError(out, 404, "Chirp does not exist")
+		return
+	}
+
+	if chirp.UserID != userId {
+		RespondWithError(out, 403, "It isn't your chirp")
+		return
+	}
+
+	err = cfg.DB_Config.Queries.DeleteChirpByID(context.Background(), chirp.ID)
+
+	if err != nil {
+		RespondWithError(out, 400, err.Error())
+		return
+	}
+
+	RespondNoContent(out, 204)
 }
