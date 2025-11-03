@@ -15,6 +15,7 @@ func main() {
 	godotenv.Load(".env")
 	dbUrl := os.Getenv("DB_URL")
 	tokenSecret := os.Getenv("JWT_SECRET")
+	polkaKey := os.Getenv("POLKA_KEY")
 	dbconfig := database.InitializeDatabase(dbUrl)
 
 	serveMux := http.NewServeMux()
@@ -22,7 +23,7 @@ func main() {
 		Handler: serveMux,
 		Addr:    ":8080",
 	}
-	config := api.ApiConfig{FileServerHits: atomic.Int32{}, JWT_Secret: tokenSecret, DB_Config: &dbconfig}
+	config := api.ApiConfig{FileServerHits: atomic.Int32{}, JWT_Secret: tokenSecret, DB_Config: &dbconfig, POLKA_KEY: polkaKey}
 	serveMux.Handle("/app/", config.MetricsMiddleware(api.HandleFileserver()))
 	serveMux.HandleFunc("POST /admin/reset", config.HandleReset)
 	serveMux.HandleFunc("GET /api/healthz", config.HandleHealthz)
@@ -36,5 +37,6 @@ func main() {
 	serveMux.HandleFunc("POST /api/refresh", config.HandleRefreshToken)
 	serveMux.HandleFunc("POST /api/revoke", config.HandleRevokeToken)
 	serveMux.HandleFunc("PUT /api/users", config.HandleUpdateUser)
+	serveMux.HandleFunc("POST /api/polka/webhooks", config.HandlePolkaWebhooks)
 	server.ListenAndServe()
 }

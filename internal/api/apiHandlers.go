@@ -20,6 +20,7 @@ import (
 type ApiConfig struct {
 	FileServerHits atomic.Int32
 	JWT_Secret     string
+	POLKA_KEY      string
 	DB_Config      *database.DatabaseConfig
 }
 
@@ -142,7 +143,20 @@ func (cfg *ApiConfig) HandleCreateChirp(out http.ResponseWriter, req *http.Reque
 
 }
 func (cfg *ApiConfig) HandleGetChirps(out http.ResponseWriter, req *http.Request) {
-	chirps, err := cfg.DB_Config.Queries.GetAllChirps(context.Background())
+	optionalAuthorQuery := req.URL.Query().Get("author_id")
+	optionalSortQuery := req.URL.Query().Get("sort")
+	var chirps []database.Chirp
+	var err error
+	if optionalAuthorQuery != "" {
+		authorId, err := uuid.Parse(optionalAuthorQuery)
+		if err != nil {
+			RespondWithError(out, 400, err.Error())
+			return
+		}
+		chirps, err = cfg.DB_Config.Queries.GetChirpsByUserID(context.Background(), authorId)
+	} else {
+		chirps, err = cfg.DB_Config.Queries.GetAllChirps(context.Background())
+	}
 	if err != nil {
 		RespondWithError(out, 400, err.Error())
 		return
@@ -152,6 +166,11 @@ func (cfg *ApiConfig) HandleGetChirps(out http.ResponseWriter, req *http.Request
 	for ix, chirp := range chirps {
 		mappedChirps[ix] = Chirp{ID: chirp.ID, CreatedAt: chirp.CreatedAt, UpdatedAt: chirp.UpdatedAt, Body: chirp.Body, UserID: chirp.UserID}
 	}
+
+	if optionalSortQuery == "desc" {
+		slices.Reverse(mappedChirps)
+	}
+
 	mappedChirpsBytes, _ := json.Marshal(mappedChirps)
 
 	RespondWithJSON(out, 200, mappedChirpsBytes)
@@ -361,4 +380,43 @@ func (cfg *ApiConfig) HandleDeleteChirp(out http.ResponseWriter, req *http.Reque
 	}
 
 	RespondNoContent(out, 204)
+}
+
+func (cfg *ApiConfig) HandlePolkaWebhooks(out http.ResponseWriter, req *http.Request) {
+	type PolkaWebhookEvent struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserID string `json:"user_id"`
+		} `json:"data"`
+	}
+	apiKey, err := auth.GetAPIKey(req.Header)
+	if err != nil {
+		RespondWithError(out, 401, err.Error())
+		return
+	}
+	if apiKey != cfg.POLKA_KEY {
+		RespondWithError(out, 401, "WRONG KEY")
+		return
+	}
+	webhookData := PolkaWebhookEvent{}
+
+	decoder := json.NewDecoder(req.Body)
+	decoder.Decode(&webhookData)
+
+	switch webhookData.Event {
+	case "user.upgraded":
+		userId, _ := uuid.Parse(webhookData.Data.UserID)
+		err := cfg.DB_Config.Queries.UpgradeUserToRed(context.Background(), userId)
+		if err != nil {
+			RespondWithError(out, 404, err.Error())
+			return
+		}
+		RespondNoContent(out, 204)
+		return
+
+	default:
+		RespondNoContent(out, 204)
+		return
+	}
+
 }

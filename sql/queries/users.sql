@@ -16,3 +16,6 @@ SELECT * FROM users where id = $1;
 
 -- name: UpdateUser :exec
 UPDATE users SET updated_at = NOW(), email = $1, hashed_password = $2 where id = $3;
+
+-- name: UpgradeUserToRed :exec
+UPDATE users SET updated_at = NOW(), is_chirpy_red = true where id = $1;
